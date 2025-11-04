@@ -236,23 +236,27 @@ if not st.session_state.game_over:
         "(e.g., *'Negotiate with leadership'*, *'Hold town hall'*, *'Push through committee'*):"
     )
 
-    # 🔹 Text box for player input
+    # 🗳️ Unique input key per turn (clears automatically each new turn)
+    input_key = f"action_input_turn_{st.session_state.turn}"
+
     action = st.text_input(
         "Your action:",
-        key="action_input",
-        placeholder="Type your action and click Submit or Clear"
+        key=input_key,
+        placeholder="Type your action..."
     )
 
-    # 🔹 Side-by-side buttons: Submit + Clear
+    # 🚀 Submit + ➡️ Next Turn buttons side by side
     col1, col2 = st.columns([1, 1])
     with col1:
         submit = st.button("🚀 Submit Action", use_container_width=True)
     with col2:
-        clear = st.button("🧹 Clear", use_container_width=True)
+        next_turn = st.button("➡️ Next Turn (Clear Box)", use_container_width=True)
 
-    # 🧹 Clear the box if requested
-    if clear:
-        st.session_state["action_input"] = ""
+    # ➡️ Next Turn button simply advances the turn counter,
+    # which triggers a new input key and clears the box.
+    if next_turn:
+        st.session_state.turn += 1
+        st.experimental_rerun()
 
     # 🖱️ Submit logic
     if submit and action:
@@ -296,6 +300,9 @@ if not st.session_state.game_over:
         # --- Display GPT narrative and updated chart ---
         st.write(narrative)
         plot_trends(st.session_state.trends)
+
+        # 🔁 Rerun app to refresh for next input
+        st.experimental_rerun()
 
 else:
     # ------------------------------------------------------
