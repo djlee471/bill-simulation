@@ -236,26 +236,26 @@ if not st.session_state.game_over:
         "(e.g., *'Negotiate with leadership'*, *'Hold town hall'*, *'Push through committee'*):"
     )
 
-    # 🗳️ Each turn uses a unique input key so Streamlit resets automatically
-    input_key = f"action_input_turn_{st.session_state.turn}"
+    # 🗳️ Use one persistent input key; don't rely on turn number for stability
     action = st.text_input(
         "Your action:",
-        key=input_key,
+        key="action_input",
         placeholder="Type your action..."
     )
 
-    # 🚀 Submit and ➡️ Next Turn buttons
+    # 🚀 Submit and 🧹 Clear buttons
     col1, col2 = st.columns([1, 1])
     with col1:
         submit = st.button("🚀 Submit Action", use_container_width=True)
     with col2:
-        clear = st.button("➡️ Next Turn (Clear Box)", use_container_width=True)
+        clear = st.button("🧹 Clear Box", use_container_width=True)
 
-    # ➡️ "Next Turn" simply advances the turn counter, triggering a new input key
+    # 🧹 Clear the input safely
     if clear:
-        st.session_state.turn += 1
+        st.session_state["action_input"] = ""
+        # Note: this will not rerun; box clears visually on next interaction
 
-    # 🚀 Submit logic
+    # 🚀 Handle the player's submitted action
     if submit and action:
         narrative, data = gpt_simulate(action)
 
