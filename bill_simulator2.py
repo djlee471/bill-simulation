@@ -217,6 +217,33 @@ from openai import OpenAI
 # PAGE CONFIG
 # ------------------------------------------------------
 st.set_page_config(page_title="Congressional Politics Simulator", page_icon="🏛️", layout="wide")
+
+# ------------------------------------------------------
+# SIDEBAR SETUP - MUST BE AT TOP BEFORE ANY LOGIC
+# ------------------------------------------------------
+st.sidebar.header("🧭 Setup")
+
+your_chamber = st.sidebar.selectbox("Which chamber do you serve in?", ["House", "Senate"])
+your_party = st.sidebar.selectbox("Your party:", ["Democrat", "Republican"])
+district_lean = st.sidebar.selectbox(
+    "District/State Partisanship (Cook PVI):", ["D+10", "D+5", "EVEN", "R+5", "R+10"]
+)
+
+st.sidebar.subheader("🧮 Party Breakdown")
+house_D = st.sidebar.slider("House Democrats", 0, 435, 210, 1)
+house_R = 435 - house_D
+st.sidebar.caption(f"House Republicans: **{house_R}** (Total = 435)")
+
+senate_D = st.sidebar.slider("Senate Democrats", 0, 100, 51, 1)
+senate_R = 100 - senate_D
+st.sidebar.caption(f"Senate Republicans: **{senate_R}** (Total = 100)")
+
+house_control = "Democrats" if house_D > house_R else "Republicans"
+senate_control = "Democrats" if senate_D > senate_R else "Republicans"
+
+# ------------------------------------------------------
+# MAIN TITLE AND HEADER
+# ------------------------------------------------------
 st.title("🏛️ Congressional Politics Simulator")
 
 st.caption(
@@ -260,29 +287,6 @@ If the bill passes your chamber, it then moves to the **other chamber**. For gam
 - Watch your **Reelection Chance** meter — you need ≥ 50 % to keep your seat.
         """
     )
-
-# ------------------------------------------------------
-# SIDEBAR SETUP
-# ------------------------------------------------------
-st.sidebar.header("🧭 Setup")
-
-your_chamber = st.sidebar.selectbox("Which chamber do you serve in?", ["House", "Senate"])
-your_party = st.sidebar.selectbox("Your party:", ["Democrat", "Republican"])
-district_lean = st.sidebar.selectbox(
-    "District/State Partisanship (Cook PVI):", ["D+10", "D+5", "EVEN", "R+5", "R+10"]
-)
-
-st.sidebar.subheader("🧮 Party Breakdown")
-house_D = st.sidebar.slider("House Democrats", 0, 435, 210, 1)
-house_R = 435 - house_D
-st.sidebar.caption(f"House Republicans: **{house_R}** (Total = 435)")
-
-senate_D = st.sidebar.slider("Senate Democrats", 0, 100, 51, 1)
-senate_R = 100 - senate_D
-st.sidebar.caption(f"Senate Republicans: **{senate_R}** (Total = 100)")
-
-house_control = "Democrats" if house_D > house_R else "Republicans"
-senate_control = "Democrats" if senate_D > senate_R else "Republicans"
 
 # ------------------------------------------------------
 # INITIAL STATE
