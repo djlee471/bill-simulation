@@ -314,8 +314,8 @@ if not st.session_state.game_over:
             st.write(narrative)
             plot_trends(st.session_state.trends)
             
+            # Increment counter so input clears on next interaction
             st.session_state.input_counter += 1
-            st.rerun()
         else:
             st.warning("⚠️ Please enter an action first!")
 
