@@ -34,11 +34,8 @@ with st.expander("📘 How to Play & Win"):
 ### 🎯 Objective
 Advance your bill through Congress while keeping your **reelection chances high**.
 You win when you **pass a bill** and **survive reelection** — but politics often rewards partial victories.
-If the bill passes your chamber, it then moves to the **other chamber**:
 
-- For gameplay flow, the simulation **condenses** that chamber’s procedural steps — introduction, committee consideration, floor debate, and final vote — into fewer turns.  
-
-- The final outcome in that chamber is determined by your overall **score and strategic choices** up to that point.
+If the bill passes your chamber, it then moves to the **other chamber**. For gameplay flow, the simulation **condenses** that chamber’s procedural steps — introduction, committee consideration, floor debate, and final vote — into fewer turns. The final outcome in that chamber is determined by your overall **score and strategic choices** up to that point.
 
 ### 🧩 Possible Outcomes (Ranked from Worst to Best)
 | Rank | Outcome | Description |
