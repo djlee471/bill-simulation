@@ -236,10 +236,15 @@ if not st.session_state.game_over:
         "(e.g., *'Negotiate with leadership'*, *'Hold town hall'*, *'Push through committee'*):"
     )
 
-    # 🗳️ Input box with a key, so it can be cleared after each turn
+    # 🔄 Handle input clearing flag
+    if "clear_input" in st.session_state and st.session_state.clear_input:
+        st.session_state.clear_input = False
+        st.experimental_rerun()
+
+    # 🗳️ Input box with a key so it can be reset each turn
     action = st.text_input("Your action:", key="action_input")
 
-    # 🖱️ Button to submit the action
+    # 🖱️ Submit button
     if st.button("Submit Action"):
         if action:
             narrative, data = gpt_simulate(action)
@@ -257,13 +262,13 @@ if not st.session_state.game_over:
             elif your_chamber == "Senate" and st.session_state.senate_progress >= 100 and st.session_state.house_progress < 100:
                 st.session_state.house_progress = min(100, st.session_state.house_progress + 5)
 
-            # --- Update charts and logs ---
+            # --- Update trends ---
             reelection_chance = calc_reelection_chance()
             update_trends(reelection_chance)
             st.session_state.history.append((action, narrative))
             st.session_state.turn += 1
 
-            # --- Win/loss conditions (unchanged) ---
+            # --- Win/loss conditions ---
             if st.session_state.house_progress >= 100 and st.session_state.senate_progress >= 100:
                 if reelection_chance >= 50:
                     st.session_state.game_over = True
@@ -279,12 +284,14 @@ if not st.session_state.game_over:
                 st.session_state.game_over = True
                 st.error("❌ Stalled Bill — Your legislation failed to advance before the session ended.")
 
-            # --- Display GPT narrative and updated chart ---
+            # --- Display results ---
             st.write(narrative)
             plot_trends(st.session_state.trends)
 
-            # ✅ Clear the text input for the next turn
-            st.session_state.action_input = ""
+            # ✅ Clear the text box safely and rerun
+            st.session_state["action_input"] = ""
+            st.session_state.clear_input = True
+            st.experimental_rerun()
 
 else:
     # ------------------------------------------------------
@@ -313,7 +320,7 @@ else:
         for k in list(st.session_state.keys()):
             del st.session_state[k]
         st.rerun()
-        
+
 
 # ------------------------------------------------------
 # GAME LOG
