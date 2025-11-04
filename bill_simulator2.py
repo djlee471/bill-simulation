@@ -34,13 +34,16 @@ with st.expander("📘 How to Play & Win"):
 ### 🎯 Objective
 Advance your bill through Congress while keeping your **reelection chances high**.
 You win when you **pass a bill** and **survive reelection** — but politics often rewards partial victories.
-
+If the bill passes your chamber, it then moves to the other chamber.
+    -For gameplay flow, the simulation condenses that chamber's procedural steps — introduction, committee consideration, floor debate, and final vote — into fewer turns.
+    -The final outcome in that chamber is determined by your overall score and strategic choices up to that point.
+    
 ### 🧩 Possible Outcomes (Ranked from Worst to Best)
 | Rank | Outcome | Description |
 |------|----------|--------------|
 | 1️⃣ | ❌ **Stalled Bill** | Neither chamber reaches 100% before 8 turns (or support collapses). |
 | 2️⃣ | 😬 **Costly Victory** | You passed one or both chambers, but lost reelection — policy success at political cost. |
-| 3️⃣ | ✅ **Political Win** | You passed your chamber’s bill **and** won reelection — a solid political success. |
+| 3️⃣ | ✅ **Political Win** | You passed your chamber's bill **and** won reelection — a solid political success. |
 | 4️⃣ | 🏆 **Full Victory** | You passed both chambers **and** won reelection — the ultimate achievement. |
 
 ### 🧠 Strategy Tips
