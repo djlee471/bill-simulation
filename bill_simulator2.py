@@ -8,8 +8,8 @@ from openai import OpenAI
 # ------------------------------------------------------
 # PAGE CONFIG
 # ------------------------------------------------------
-st.set_page_config(page_title="Congressional Survival Simulator", page_icon="🏛️", layout="wide")
-st.title("🏛️ Congressional Survival Simulator")
+st.set_page_config(page_title="Congressional Politics Simulator", page_icon="🏛️", layout="wide")
+st.title("🏛️ Congressional Politics Simulator")
 
 st.caption(
     "Balance your legislative ambitions with your political survival. "
@@ -231,48 +231,60 @@ if not st.session_state.game_over:
     st.metric("🗳️ Projected Reelection Chance", f"{reelection_chance:.0f}%")
 
     st.divider()
-    st.write("💬 Enter your action for this turn (e.g., *'Negotiate with leadership'*, *'Hold town hall'*, *'Push through committee'*):")
-    action = st.text_input("Your action:")
+    st.write(
+        "💬 Enter your action for this turn "
+        "(e.g., *'Negotiate with leadership'*, *'Hold town hall'*, *'Push through committee'*):"
+    )
 
-    if st.button("Submit Action") and action:
-        narrative, data = gpt_simulate(action)
-        st.session_state.support = max(0, min(100, st.session_state.support + data["support_change"]))
-        st.session_state.public = max(0, min(100, st.session_state.public + data["public_change"]))
-        st.session_state.house_progress = max(0, min(100, st.session_state.house_progress + data["house_progress_change"]))
-        st.session_state.senate_progress = max(0, min(100, st.session_state.senate_progress + data["senate_progress_change"]))
-        st.session_state.reelection_risk += max(0, data["reelection_risk"])
+    # 🗳️ Input box with a key, so it can be cleared after each turn
+    action = st.text_input("Your action:", key="action_input")
 
-        # Momentum boost if one chamber passes first
-        if your_chamber == "House" and st.session_state.house_progress >= 100 and st.session_state.senate_progress < 100:
-            st.session_state.senate_progress = min(100, st.session_state.senate_progress + 5)
-        elif your_chamber == "Senate" and st.session_state.senate_progress >= 100 and st.session_state.house_progress < 100:
-            st.session_state.house_progress = min(100, st.session_state.house_progress + 5)
+    # 🖱️ Button to submit the action
+    if st.button("Submit Action"):
+        if action:
+            narrative, data = gpt_simulate(action)
 
-        reelection_chance = calc_reelection_chance()
-        update_trends(reelection_chance)
-        st.session_state.history.append((action, narrative))
-        st.session_state.turn += 1
+            # --- Update player stats ---
+            st.session_state.support = max(0, min(100, st.session_state.support + data["support_change"]))
+            st.session_state.public = max(0, min(100, st.session_state.public + data["public_change"]))
+            st.session_state.house_progress = max(0, min(100, st.session_state.house_progress + data["house_progress_change"]))
+            st.session_state.senate_progress = max(0, min(100, st.session_state.senate_progress + data["senate_progress_change"]))
+            st.session_state.reelection_risk += max(0, data["reelection_risk"])
 
-        # --------------------------------------------------
-        # WIN / LOSS CONDITIONS (revised: keep playing)
-        # --------------------------------------------------
-        if st.session_state.house_progress >= 100 and st.session_state.senate_progress >= 100:
-            if reelection_chance >= 50:
+            # --- Momentum boost logic ---
+            if your_chamber == "House" and st.session_state.house_progress >= 100 and st.session_state.senate_progress < 100:
+                st.session_state.senate_progress = min(100, st.session_state.senate_progress + 5)
+            elif your_chamber == "Senate" and st.session_state.senate_progress >= 100 and st.session_state.house_progress < 100:
+                st.session_state.house_progress = min(100, st.session_state.house_progress + 5)
+
+            # --- Update charts and logs ---
+            reelection_chance = calc_reelection_chance()
+            update_trends(reelection_chance)
+            st.session_state.history.append((action, narrative))
+            st.session_state.turn += 1
+
+            # --- Win/loss conditions (unchanged) ---
+            if st.session_state.house_progress >= 100 and st.session_state.senate_progress >= 100:
+                if reelection_chance >= 50:
+                    st.session_state.game_over = True
+                    st.success("🏆 Full Victory — You passed both chambers and won reelection. A rare achievement!")
+                else:
+                    st.session_state.game_over = True
+                    st.warning("😬 Costly Victory — You passed Congress, but lost reelection.")
+            elif your_chamber == "House" and st.session_state.house_progress >= 100 and st.session_state.senate_progress < 100:
+                st.info("✅ The House has passed your bill! Now focus on getting it through the Senate...")
+            elif your_chamber == "Senate" and st.session_state.senate_progress >= 100 and st.session_state.house_progress < 100:
+                st.info("✅ The Senate has passed your bill! Can you persuade the House before the session ends?")
+            elif st.session_state.turn > 8 or st.session_state.support < 20:
                 st.session_state.game_over = True
-                st.success("🏆 Full Victory — You passed both chambers and won reelection. A rare achievement!")
-            else:
-                st.session_state.game_over = True
-                st.warning("😬 Costly Victory — You passed Congress, but lost reelection.")
-        elif your_chamber == "House" and st.session_state.house_progress >= 100 and st.session_state.senate_progress < 100:
-            st.info("✅ The House has passed your bill! Now focus on getting it through the Senate...")
-        elif your_chamber == "Senate" and st.session_state.senate_progress >= 100 and st.session_state.house_progress < 100:
-            st.info("✅ The Senate has passed your bill! Can you persuade the House before the session ends?")
-        elif st.session_state.turn > 8 or st.session_state.support < 20:
-            st.session_state.game_over = True
-            st.error("❌ Stalled Bill — Your legislation failed to advance before the session ended.")
+                st.error("❌ Stalled Bill — Your legislation failed to advance before the session ended.")
 
-        st.write(narrative)
-        plot_trends(st.session_state.trends)
+            # --- Display GPT narrative and updated chart ---
+            st.write(narrative)
+            plot_trends(st.session_state.trends)
+
+            # ✅ Clear the text input for the next turn
+            st.session_state.action_input = ""
 
 else:
     # ------------------------------------------------------
@@ -301,6 +313,7 @@ else:
         for k in list(st.session_state.keys()):
             del st.session_state[k]
         st.rerun()
+        
 
 # ------------------------------------------------------
 # GAME LOG
