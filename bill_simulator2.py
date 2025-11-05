@@ -62,11 +62,11 @@ If it passes one chamber → **Partial Win**.
 If you lose reelection or stall → **Costly or Stalled Outcome**.
 
 | Rank | Outcome | Description |
-|------|-----------|-------------|
+|------|----------|-------------|
 | 1️⃣ | 🏆 **Full Victory** | Passed both chambers + won reelection. |
 | 2️⃣ | ✅ **Political Win** | Passed your chamber + won reelection. |
 | 3️⃣ | 😬 **Costly Victory** | Passed but lost reelection. |
-| 4️⃣ | ❌ **Stalled Bill** | Failed to advance before 8 turns or support < 20%. |
+| 4️⃣ | ❌ **Stalled Bill** | Failed to advance before 8 turns. |
 
 ### 🧠 Strategy Tips
 - Align moves with your **district lean** and **chamber control**.  
@@ -135,7 +135,7 @@ Action this turn: {action_text}
 
 Respond with a short paragraph (≤150 words) describing what happens,  
 then output a JSON object like:  
-{{"support": int, "public": int, "house_progress_change": int, "senate_progress_change": int, "reelection_risk": int}}  (for turn 1) or  
+{{"support": int, "public": int, "house_progress_change": int, "senate_progress_change": int, "reelection_risk": int}} (for Turn 1) or  
 {{"support_change": int, "public_change": int, "house_progress_change": int, "senate_progress_change": int, "reelection_risk": int}} (for later turns).
 """
 
@@ -251,37 +251,29 @@ if not st.session_state.game_over:
                 st.session_state.support = max(0, min(100, st.session_state.support + data.get("support_change", 0)))
                 st.session_state.public = max(0, min(100, st.session_state.public + data.get("public_change", 0)))
 
-            # Progress updates independent
+            # Progress and reelection risk
             st.session_state.house_progress = max(0, min(100, st.session_state.house_progress + data.get("house_progress_change", 0)))
             st.session_state.senate_progress = max(0, min(100, st.session_state.senate_progress + data.get("senate_progress_change", 0)))
             st.session_state.reelection_risk += max(0, data.get("reelection_risk", 0))
 
-            # Chamber interdependence bonus
-            if your_chamber == "House" and st.session_state.house_progress >= 100 and st.session_state.senate_progress < 100:
-                st.session_state.senate_progress = min(100, st.session_state.senate_progress + 5)
-            elif your_chamber == "Senate" and st.session_state.senate_progress >= 100 and st.session_state.house_progress < 100:
-                st.session_state.house_progress = min(100, st.session_state.house_progress + 5)
-
+            # Record and advance turn
             reelection_chance = calc_reelection_chance()
             update_trends(reelection_chance)
             st.session_state.history.append((action, narrative))
             st.session_state.turn += 1
 
-            # Outcome checks
-            if st.session_state.house_progress >= 100 and st.session_state.senate_progress >= 100:
-                if reelection_chance >= 50:
-                    st.session_state.game_over = True
-                    st.success("🏆 Full Victory — Passed both chambers and won reelection.")
-                else:
-                    st.session_state.game_over = True
-                    st.warning("😬 Costly Victory — Passed Congress but lost reelection.")
-            elif your_chamber == "House" and st.session_state.house_progress >= 100 and st.session_state.senate_progress < 100:
-                st.info("✅ The House has passed your bill! Now focus on the Senate ...")
-            elif your_chamber == "Senate" and st.session_state.senate_progress >= 100 and st.session_state.house_progress < 100:
-                st.info("✅ The Senate has passed your bill! Can you persuade the House before the session ends?")
-            elif st.session_state.turn > 8 or (st.session_state.support is not None and st.session_state.support < 20):
+            # ---- End game only after 8 turns ----
+            if st.session_state.turn > 8:
                 st.session_state.game_over = True
-                st.error("❌ Stalled Bill — Your legislation failed to advance before the session ended.")
+                if st.session_state.house_progress >= 100 and st.session_state.senate_progress >= 100 and reelection_chance >= 50:
+                    st.success("🏆 Full Victory — Passed both chambers and won reelection.")
+                elif st.session_state.house_progress >= 100 or st.session_state.senate_progress >= 100:
+                    if reelection_chance >= 50:
+                        st.success("✅ Political Win — Bill passed one chamber and you survived reelection.")
+                    else:
+                        st.warning("😬 Costly Victory — Bill passed but you lost reelection.")
+                else:
+                    st.error("❌ Stalled Bill — Session ended before passage.")
 
             st.write(narrative)
             plot_trends(st.session_state.trends)
