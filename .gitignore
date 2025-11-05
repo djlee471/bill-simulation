@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+
+# Virtual environments
+.env
+.venv/
+venv/
+env/
+*.env
+
+# Jupyter / Streamlit
+.ipynb_checkpoints
+.streamlit/
+
+# OS / Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Build artifacts
+*.log
+*.bak
+*.tmp
+
+# Conda environment
+*.yml
+
+# in .gitignore
+.streamlit/secrets.toml
