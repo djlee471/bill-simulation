@@ -84,7 +84,7 @@ Customize your member profile and chamber compositions in the sidebar.
 
 ### 🎯 Objective
 
-Advance your bill through Congress while keeping your reelection chances high.
+Advance your bill through Congress while keeping your reelection chances high. You have **8 turns** to navigate the legislative process.
 
 You win when you **pass a bill** and **survive reelection** — but politics often rewards partial victories.
 
