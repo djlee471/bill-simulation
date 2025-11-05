@@ -243,7 +243,7 @@ def plot_trends(df):
 if not st.session_state.game_over:
     c1, c2 = st.columns(2)
     with c1:
-        st.subheader(f"Turn {st.session_state.turn}")
+        st.subheader(f"Turn {st.session_state.turn} of 8")
         st.write(f"**Support:** {st.session_state.support}%  **Public Approval:** {st.session_state.public}%")
     with c2:
         overall = (st.session_state.house_progress + st.session_state.senate_progress) / 2
