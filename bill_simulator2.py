@@ -34,7 +34,7 @@ district_lean = st.sidebar.selectbox(
 st.sidebar.subheader("🧮 Party Breakdown")
 house_D = st.sidebar.slider(
     "House Democrats", 
-    0, 435, 210, 1,
+    0, 435, 218, 1,
     key="house_d_slider"
 )
 house_R = 435 - house_D
@@ -76,19 +76,27 @@ if not api_key:
 with st.expander("📘 How to Play & Win"):
     st.markdown(
         """
+
+### 🎲 To Start Gameplay
+
+Customize your member profile and chamber compositions in the sidebar.
+
+
 ### 🎯 Objective
-Advance your bill through Congress while keeping your **reelection chances high**.
+
+Advance your bill through Congress while keeping your reelection chances high.
+
 You win when you **pass a bill** and **survive reelection** — but politics often rewards partial victories.
 
 If the bill passes your chamber, it then moves to the **other chamber**. For gameplay flow, the simulation **condenses** that chamber's procedural steps — introduction, committee consideration, floor debate, and final vote — into fewer turns. The final outcome in that chamber is determined by your overall **score and strategic choices** up to that point.
 
-### 🧩 Possible Outcomes (Ranked from Worst to Best)
+### 🧩 Possible Outcomes (Ranked from Best to Worst)
 | Rank | Outcome | Description |
 |------|----------|--------------|
-| 1️⃣ | ❌ **Stalled Bill** | Neither chamber reaches 100% before 8 turns (or support collapses). |
-| 2️⃣ | 😬 **Costly Victory** | You passed one or both chambers, but lost reelection — policy success at political cost. |
-| 3️⃣ | ✅ **Political Win** | You passed your chamber's bill **and** won reelection — a solid political success. |
-| 4️⃣ | 🏆 **Full Victory** | You passed both chambers **and** won reelection — the ultimate achievement. |
+| 1️⃣ | 🏆 **Full Victory** | You passed both chambers **and** won reelection — the ultimate achievement. |
+| 2️⃣ | ✅ **Political Win** | You passed your chamber's bill **and** won reelection — a solid political success. |
+| 3️⃣ | 😬 **Costly Victory** | You passed one or both chambers, but lost reelection — policy success at political cost. |
+| 4️⃣ | ❌ **Stalled Bill** | Neither chamber reaches 100% before 8 turns (or support collapses). |
 
 ### 🧠 Strategy Tips
 - Align your moves with your **district lean** and the **party control** of each chamber.  
