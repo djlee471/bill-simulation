@@ -16,17 +16,17 @@ st.set_page_config(page_title="Congressional Politics Simulator", page_icon="�
 st.sidebar.header("🧭 Setup")
 
 your_chamber = st.sidebar.selectbox(
-    "Which chamber do you serve in?", 
+    "Which chamber do you serve in?",
     ["House", "Senate"],
     key="chamber_select"
 )
 your_party = st.sidebar.selectbox(
-    "Your party:", 
+    "Your party:",
     ["Democrat", "Republican"],
     key="party_select"
 )
 district_lean = st.sidebar.selectbox(
-    "District/State Partisanship (Cook PVI):", 
+    "District/State Partisanship (Cook PVI):",
     ["D+10", "D+5", "EVEN", "R+5", "R+10"],
     key="district_select"
 )
@@ -97,7 +97,7 @@ If you lose reelection or stall → **Costly or Stalled Outcome**.
 # ------------------------------------------------------
 if "turn" not in st.session_state:
     st.session_state.turn = 1
-    st.session_state.support = None   # GPT will set baseline after Turn 1
+    st.session_state.support = None   # GPT sets after Turn 1
     st.session_state.public = 50
     st.session_state.house_progress = 0
     st.session_state.senate_progress = 0
@@ -123,9 +123,9 @@ def gpt_simulate(action_text):
         "support ±5–15, public ±5–10, progress +10–25, reelection risk +0–10. "
         "Consider partisanship, chamber control, and district lean. "
         "Return a short narrative followed by a JSON block with numeric updates. "
-        "On the first turn, interpret the member's action as the bill introduction or early positioning, "
-        "and set realistic starting values for support (initial coalition strength) and public approval, "
-        "rather than treating them purely as changes."
+        "On the first turn, interpret the member's action as the bill introduction or early positioning. "
+        "Set realistic starting values for support (initial coalition strength) and public approval — "
+        "some new bills start below 50% support, especially if partisan or controversial."
     )
 
     user_prompt = f"""
@@ -155,8 +155,10 @@ then output a JSON object like:
     try:
         r = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "system", "content": system_prompt},
-                      {"role": "user", "content": user_prompt}],
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
         )
         text = r.choices[0].message.content
         try:
@@ -229,6 +231,8 @@ if not st.session_state.game_over:
         st.subheader(f"Turn {st.session_state.turn} of 8")
         support_display = st.session_state.support if st.session_state.support is not None else 0
         st.write(f"**Support:** {support_display}% **Public Approval:** {st.session_state.public}%")
+        if st.session_state.support is None:
+            st.caption("First-turn actions establish your initial coalition strength.")
     with c2:
         overall = (st.session_state.house_progress + st.session_state.senate_progress) / 2
         st.metric("Overall Progress", f"{overall:.0f}%")
@@ -271,7 +275,7 @@ if not st.session_state.game_over:
 
             # ---- First-turn baseline set by GPT ----
             if st.session_state.support is None:
-                st.session_state.support = max(0, min(100, 50 + data["support_change"]))
+                st.session_state.support = max(0, min(100, 35 + data["support_change"]))
                 st.session_state.public = max(0, min(100, 50 + data["public_change"]))
             else:
                 st.session_state.support = max(0, min(100, st.session_state.support + data["support_change"]))
