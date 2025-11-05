@@ -11,7 +11,7 @@ from openai import OpenAI
 st.set_page_config(page_title="Congressional Politics Simulator", page_icon="🏛️", layout="wide")
 
 # ------------------------------------------------------
-# SIDEBAR SETUP - WITH EXPLICIT KEYS
+# SIDEBAR SETUP
 # ------------------------------------------------------
 st.sidebar.header("🧭 Setup")
 
@@ -32,19 +32,11 @@ district_lean = st.sidebar.selectbox(
 )
 
 st.sidebar.subheader("🧮 Party Breakdown")
-house_D = st.sidebar.slider(
-    "House Democrats", 
-    0, 435, 218, 1,
-    key="house_d_slider"
-)
+house_D = st.sidebar.slider("House Democrats", 0, 435, 218, 1, key="house_d_slider")
 house_R = 435 - house_D
 st.sidebar.caption(f"House Republicans: **{house_R}** (Total = 435)")
 
-senate_D = st.sidebar.slider(
-    "Senate Democrats", 
-    0, 100, 51, 1,
-    key="senate_d_slider"
-)
+senate_D = st.sidebar.slider("Senate Democrats", 0, 100, 51, 1, key="senate_d_slider")
 senate_R = 100 - senate_D
 st.sidebar.caption(f"Senate Republicans: **{senate_R}** (Total = 100)")
 
@@ -52,10 +44,9 @@ house_control = "Democrats" if house_D > house_R else "Republicans"
 senate_control = "Democrats" if senate_D > senate_R else "Republicans"
 
 # ------------------------------------------------------
-# MAIN TITLE AND HEADER
+# MAIN HEADER
 # ------------------------------------------------------
 st.title("🏛️ Congressional Politics Simulator")
-
 st.caption(
     "Balance your legislative ambitions with your political survival. "
     "Will you pass your bill **and** win reelection — or sacrifice your seat for policy success?"
@@ -65,7 +56,6 @@ st.caption(
 # LOAD API KEY
 # ------------------------------------------------------
 api_key = os.getenv("OPENAI_API_KEY")
-
 if not api_key:
     st.error("⚠️ OpenAI API key not found. Please set `OPENAI_API_KEY` in Streamlit Secrets.")
     st.stop()
@@ -76,33 +66,29 @@ if not api_key:
 with st.expander("📘 How to Play & Win"):
     st.markdown(
         """
-
-### 🎲 To Start Gameplay
-
-Customize your member profile and chamber compositions in the sidebar.
-
-
 ### 🎯 Objective
+Advance your bill through Congress while keeping your reelection chances high.  
+You have **8 turns** to navigate the process.
 
-Advance your bill through Congress while keeping your reelection chances high. You have **8 turns** to navigate the legislative process.
+If your bill passes both chambers and you win reelection → **Full Victory**.  
+If it passes one chamber → **Partial Win**.  
+If you lose reelection or stall → **Costly or Stalled Outcome**.
 
-You win when you **pass a bill** and **survive reelection** — but politics often rewards partial victories.
-
-If the bill passes your chamber, it then moves to the **other chamber**. For gameplay flow, the simulation **condenses** that chamber's procedural steps — introduction, committee consideration, floor debate, and final vote — into fewer turns. The final outcome in that chamber is determined by your overall **score and strategic choices** up to that point.
-
-### 🧩 Possible Outcomes (Ranked from Best to Worst)
 | Rank | Outcome | Description |
-|------|----------|--------------|
-| 1️⃣ | 🏆 **Full Victory** | You passed both chambers **and** won reelection — the ultimate achievement. |
-| 2️⃣ | ✅ **Political Win** | You passed your chamber's bill **and** won reelection — a solid political success. |
-| 3️⃣ | 😬 **Costly Victory** | You passed one or both chambers, but lost reelection — policy success at political cost. |
-| 4️⃣ | ❌ **Stalled Bill** | Neither chamber reaches 100% before 8 turns (or support collapses). |
+|------|----------|-------------|
+| 1️⃣ | 🏆 **Full Victory** | Passed both chambers + won reelection. |
+| 2️⃣ | ✅ **Political Win** | Passed your chamber + won reelection. |
+| 3️⃣ | 😬 **Costly Victory** | Passed but lost reelection. |
+| 4️⃣ | ❌ **Stalled Bill** | Failed to advance before 8 turns or support < 20%. |
 
 ### 🧠 Strategy Tips
-- Align your moves with your **district lean** and the **party control** of each chamber.  
-- Risky actions advance your bill faster but raise **reelection risk**.  
-- Safe, consensus-building moves protect your seat but slow progress.  
-- Watch your **Reelection Chance** meter — you need ≥ 50 % to keep your seat.
+- Align moves with your **district lean** and **chamber control**.  
+- Risky actions speed up progress but raise reelection risk.  
+- Consensus actions protect approval but may slow advancement.  
+- Track:  
+  - 🏛 **Support** = congressional coalition strength  
+  - 📊 **Public Approval** = voter sentiment  
+  - 🗳 **Reelection Chance** = calculated each turn
         """
     )
 
@@ -111,7 +97,7 @@ If the bill passes your chamber, it then moves to the **other chamber**. For gam
 # ------------------------------------------------------
 if "turn" not in st.session_state:
     st.session_state.turn = 1
-    st.session_state.support = 50
+    st.session_state.support = None   # GPT will set baseline after Turn 1
     st.session_state.public = 50
     st.session_state.house_progress = 0
     st.session_state.senate_progress = 0
@@ -136,7 +122,10 @@ def gpt_simulate(action_text):
         "Use realistic but gameplay-friendly magnitudes: "
         "support ±5–15, public ±5–10, progress +10–25, reelection risk +0–10. "
         "Consider partisanship, chamber control, and district lean. "
-        "Return a short narrative followed by a JSON block with numeric updates."
+        "Return a short narrative followed by a JSON block with numeric updates. "
+        "On the first turn, interpret the member's action as the bill introduction or early positioning, "
+        "and set realistic starting values for support (initial coalition strength) and public approval, "
+        "rather than treating them purely as changes."
     )
 
     user_prompt = f"""
@@ -158,7 +147,7 @@ Current stats:
 
 Action this turn: {action_text}
 
-Respond with a short paragraph (≤150 words) describing what happens,
+Respond with a short paragraph (≤150 words) describing what happens,  
 then output a JSON object like:
 {{"support_change": int, "public_change": int, "house_progress_change": int, "senate_progress_change": int, "reelection_risk": int}}
 """
@@ -171,24 +160,20 @@ then output a JSON object like:
         )
         text = r.choices[0].message.content
         try:
-            json_part = text[text.index("{") : text.rindex("}") + 1]
+            json_part = text[text.index("{"): text.rindex("}") + 1]
             data = json.loads(json_part)
         except Exception:
             data = dict(
-                support_change=0,
-                public_change=0,
-                house_progress_change=0,
-                senate_progress_change=0,
-                reelection_risk=0,
+                support_change=0, public_change=0,
+                house_progress_change=0, senate_progress_change=0,
+                reelection_risk=0
             )
         return text, data
     except Exception as e:
         return f"⚠️ GPT error: {e}", dict(
-            support_change=0,
-            public_change=0,
-            house_progress_change=0,
-            senate_progress_change=0,
-            reelection_risk=0,
+            support_change=0, public_change=0,
+            house_progress_change=0, senate_progress_change=0,
+            reelection_risk=0
         )
 
 # ------------------------------------------------------
@@ -212,15 +197,13 @@ def update_trends(chance):
         [
             st.session_state.trends,
             pd.DataFrame(
-                [
-                    dict(
-                        Turn=st.session_state.turn,
-                        Support=st.session_state.support,
-                        Public=st.session_state.public,
-                        ReelectionRisk=st.session_state.reelection_risk,
-                        ReelectionChance=chance,
-                    )
-                ]
+                [dict(
+                    Turn=st.session_state.turn,
+                    Support=st.session_state.support,
+                    Public=st.session_state.public,
+                    ReelectionRisk=st.session_state.reelection_risk,
+                    ReelectionChance=chance,
+                )]
             ),
         ],
         ignore_index=True,
@@ -244,7 +227,8 @@ if not st.session_state.game_over:
     c1, c2 = st.columns(2)
     with c1:
         st.subheader(f"Turn {st.session_state.turn} of 8")
-        st.write(f"**Support:** {st.session_state.support}%  **Public Approval:** {st.session_state.public}%")
+        support_display = st.session_state.support if st.session_state.support is not None else 0
+        st.write(f"**Support:** {support_display}% **Public Approval:** {st.session_state.public}%")
     with c2:
         overall = (st.session_state.house_progress + st.session_state.senate_progress) / 2
         st.metric("Overall Progress", f"{overall:.0f}%")
@@ -262,12 +246,9 @@ if not st.session_state.game_over:
     st.metric("🗳️ Projected Reelection Chance", f"{reelection_chance:.0f}%")
 
     st.divider()
-    st.write(
-        "💬 Enter your action for this turn "
-        "(e.g., *'Negotiate with leadership'*, *'Hold town hall'*, *'Push through committee'*):"
-    )
+    st.write("💬 Enter your action for this turn "
+             "(e.g., *'Negotiate with leadership'*, *'Hold town hall'*, *'Push through committee'*):")
 
-    # Dynamic key based on counter
     action = st.text_input(
         "Your action:",
         key=f"action_input_{st.session_state.input_counter}",
@@ -288,12 +269,23 @@ if not st.session_state.game_over:
         if action:
             narrative, data = gpt_simulate(action)
 
-            st.session_state.support = max(0, min(100, st.session_state.support + data["support_change"]))
-            st.session_state.public = max(0, min(100, st.session_state.public + data["public_change"]))
-            st.session_state.house_progress = max(0, min(100, st.session_state.house_progress + data["house_progress_change"]))
-            st.session_state.senate_progress = max(0, min(100, st.session_state.senate_progress + data["senate_progress_change"]))
+            # ---- First-turn baseline set by GPT ----
+            if st.session_state.support is None:
+                st.session_state.support = max(0, min(100, 50 + data["support_change"]))
+                st.session_state.public = max(0, min(100, 50 + data["public_change"]))
+            else:
+                st.session_state.support = max(0, min(100, st.session_state.support + data["support_change"]))
+                st.session_state.public = max(0, min(100, st.session_state.public + data["public_change"]))
+
+            # Progress updates remain independent
+            st.session_state.house_progress = max(0, min(100,
+                st.session_state.house_progress + data["house_progress_change"]))
+            st.session_state.senate_progress = max(0, min(100,
+                st.session_state.senate_progress + data["senate_progress_change"]))
+
             st.session_state.reelection_risk += max(0, data["reelection_risk"])
 
+            # Chamber interdependence bonus
             if your_chamber == "House" and st.session_state.house_progress >= 100 and st.session_state.senate_progress < 100:
                 st.session_state.senate_progress = min(100, st.session_state.senate_progress + 5)
             elif your_chamber == "Senate" and st.session_state.senate_progress >= 100 and st.session_state.house_progress < 100:
@@ -304,30 +296,31 @@ if not st.session_state.game_over:
             st.session_state.history.append((action, narrative))
             st.session_state.turn += 1
 
+            # ---- Outcome checks ----
             if st.session_state.house_progress >= 100 and st.session_state.senate_progress >= 100:
                 if reelection_chance >= 50:
                     st.session_state.game_over = True
-                    st.success("🏆 Full Victory — You passed both chambers and won reelection. A rare achievement!")
+                    st.success("🏆 Full Victory — Passed both chambers and won reelection.")
                 else:
                     st.session_state.game_over = True
-                    st.warning("😬 Costly Victory — You passed Congress, but lost reelection.")
+                    st.warning("😬 Costly Victory — Passed Congress but lost reelection.")
             elif your_chamber == "House" and st.session_state.house_progress >= 100 and st.session_state.senate_progress < 100:
-                st.info("✅ The House has passed your bill! Now focus on getting it through the Senate...")
+                st.info("✅ The House has passed your bill! Now focus on the Senate ...")
             elif your_chamber == "Senate" and st.session_state.senate_progress >= 100 and st.session_state.house_progress < 100:
                 st.info("✅ The Senate has passed your bill! Can you persuade the House before the session ends?")
-            elif st.session_state.turn > 8 or st.session_state.support < 20:
+            elif st.session_state.turn > 8 or (st.session_state.support is not None and st.session_state.support < 20):
                 st.session_state.game_over = True
                 st.error("❌ Stalled Bill — Your legislation failed to advance before the session ended.")
 
             st.write(narrative)
             plot_trends(st.session_state.trends)
-            
-            # Increment counter so input clears on next interaction
+
             st.session_state.input_counter += 1
         else:
             st.warning("⚠️ Please enter an action first!")
 
 else:
+    # ---- GAME OVER VIEW ----
     st.header("📊 Final Results")
     st.metric("Support", st.session_state.support)
     st.metric("Public Approval", st.session_state.public)
