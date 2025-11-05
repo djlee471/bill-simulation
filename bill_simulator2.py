@@ -86,9 +86,10 @@ If you lose reelection or stall → **Costly or Stalled Outcome**.
 - Risky actions speed up progress but raise reelection risk.  
 - Consensus actions protect approval but may slow advancement.  
 - Track:  
-  - 🏛 **Support** = congressional coalition strength  
-  - 📊 **Public Approval** = voter sentiment  
-  - 🗳 **Reelection Chance** = calculated each turn
+  - 🏛 **Support in Chamber** = share of legislators backing your bill.  
+  - 📊 **Public Support in District** = voter sentiment in your district.  
+  - 🗳 **Reelection Chance** = calculated each turn.  
+  - 📈 **Progress** = procedural advancement toward passage.  
         """
     )
 
@@ -230,7 +231,7 @@ if not st.session_state.game_over:
     with c1:
         st.subheader(f"Turn {st.session_state.turn} of 8")
         support_display = st.session_state.support if st.session_state.support is not None else 0
-        st.write(f"**Support:** {support_display}% **Public Approval:** {st.session_state.public}%")
+        st.write(f"**Support in Chamber:** {support_display}% **Public Support in District:** {st.session_state.public}%")
         if st.session_state.support is None:
             st.caption("First-turn actions establish your initial coalition strength.")
     with c2:
