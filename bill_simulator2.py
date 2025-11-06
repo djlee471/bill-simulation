@@ -74,7 +74,11 @@ if not api_key:
 with st.expander("📘 How to Play & Win"):
     st.markdown(
         """
-### 🎯 Objective
+### 🎮 Getting Started
+**Before playing, make your selections in the sidebar (←) to configure your member and set the political landscape.**
+
+        
+        ### 🎯 Objective
 Advance your bill through your chamber while keeping your reelection chances high.  
 You have **8 turns** to navigate the process.
 
