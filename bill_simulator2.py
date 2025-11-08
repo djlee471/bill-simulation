@@ -147,7 +147,7 @@ def gpt_simulate(action_text):
         "1) Separate worlds: District/public approval NEVER affects chamber progress.\n"
         "2) Chamber support ceilings must follow composition realism:\n"
         "   - Let majority_share = (majority_party_seats / total_seats) × 100.\n"
-        "   - **For partisan/controversial bills:** max_support = majority_share + 5.\n"
+        "   - **For partisan or controversial bills:** max_support = majority_share + 5.\n"
         "   - **For bipartisan/consensus bills:** max_support = majority_share + 10 (never above 80).\n"
         "   - Minority-party bills start ≈35–45 % and cannot exceed 50 without bipartisan cooperation.\n"
         "   - If computed support exceeds max_support, cap it and note 'cap_applied=true'.\n"
@@ -160,6 +160,13 @@ def gpt_simulate(action_text):
         "- Decisive zone (House>55 / Senate>65): ≥+25, typically +30–35\n"
         "- Overwhelming (House≥70 / Senate≥75): +30–35\n"
         "Always increase progress once above threshold until 100 unless a defeat occurs.\n"
+        "\n"
+        "MANDATORY PROGRESS ENFORCEMENT\n"
+        "When determining chamber_progress_change:\n"
+        "- These increments are mandatory, not suggestions. Do not output values below the lower bound of each range.\n"
+        "- Once support >55 (House) or >65 (Senate), chamber_progress_change MUST be at least +25 (preferably +30–35).\n"
+        "- If current_progress ≥80 and support >55 (House) or >65 (Senate), increase progress enough to reach 100 — treat this as final passage.\n"
+        "- Never output 0 progress while support is above threshold unless a procedural defeat or leadership withdrawal is clearly described.\n"
         "\n"
         "MAGNITUDES\n"
         "- support_change: ±3–15\n"
@@ -188,7 +195,6 @@ def gpt_simulate(action_text):
         "- Reference the live support, public, and progress values from the input when producing new deltas.\n"
         "- When narrative context conflicts with numeric rules, the numeric realism rules take priority.\n"
     )
-
 
     user_prompt = f"""
 Member info:
