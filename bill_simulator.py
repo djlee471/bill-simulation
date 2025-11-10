@@ -234,6 +234,14 @@ def gpt_simulate(action_text):
            - House: 51%
            - Senate: 60%
            - If reconciliation is being used in the Senate, use 51% instead of 60%.
+           - Once reconciliation is invoked or actively discussed as a truly viable path 
+             (i.e., the proposal qualifies under the Byrd Rule and is confirmed as eligible),
+             apply this reduced threshold for all subsequent turns. 
+             Make sure to clearly acknowledge reconciliation in the narrative 
+             (e.g., “using the reconciliation process to bypass the filibuster”).
+             Do not continue to refer to a 60% threshold once reconciliation is in effect.
+             Use the chamber progress pacing rules defined below, where the threshold 
+             is now 51, to determine appropriate progress increases under reconciliation.
 
         2. **Support calculation**
            - First, calculate the *new support level*:
