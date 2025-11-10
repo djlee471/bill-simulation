@@ -204,9 +204,8 @@ def gpt_simulate(action_text):
     )
 
 
-    # Safely handle baseline support on first turn
+    # --- Determine current (pre-turn) stats ---
     if st.session_state.support is None or st.session_state.turn == 1:
-        # Use deterministic baseline rule instead of 0
         if your_chamber == "House":
             chamber_baseline = (chamber_D / (chamber_D + chamber_R) * 100) - 15
         else:
@@ -215,12 +214,14 @@ def gpt_simulate(action_text):
     else:
         current_support = st.session_state.support
 
-    # Optional: smoother phrasing for Turn 1
-    if st.session_state.turn == 1:
-        context_note = "At the start of the session, before any lobbying or media efforts,"
-    else:
-        context_note = "Following previous actions,"
+    # Optional: context phrasing
+    context_note = (
+        "At the start of the session, before any lobbying or media efforts,"
+        if st.session_state.turn == 1
+        else "Following previous actions,"
+    )
 
+    # --- Build first GPT call (to get deltas) ---
     user_prompt = f"""
 {context_note}
 
@@ -236,47 +237,64 @@ Current stats:
 - Chamber Progress: {st.session_state.chamber_progress}%
 - Reelection Risk: {st.session_state.reelection_risk}
 
-Notes:
-- Chamber support = backing among legislators (not public opinion).
-- Chamber progress = procedural advancement (committee → floor → passage).
-- The member’s support level is {current_support}% in a chamber where {chamber_control} hold {chamber_D / (chamber_D + chamber_R) * 100:.1f}% of seats.
-- The next key procedural threshold is {'51% for passage in the House' if your_chamber == 'House' else '60% for cloture in the Senate'}.
-
 Action this turn: {action_text}
 
-Determine the correct numeric zone based on current support:
-- House thresholds: below <51%, momentum 51–55%, decisive 56–69%, overwhelming ≥70%
-- Senate thresholds: below <60%, momentum 60–65%, decisive 66–74%, overwhelming ≥75%
-
-Then apply these **hard rules** for progress:
-- Choose `chamber_progress_change` strictly from the numeric range for that zone.
-- Never output zero progress when support ≥ threshold.
-- If progress ≥ 80% and support ≥ threshold, complete passage by setting progress to 100%.
-- Apply numeric realism rules strictly, even if the narrative tone implies slowdown.
-
-Respond with ≤150 words describing this turn’s outcome,
-then output a JSON object like:
+Determine appropriate numeric deltas based on the situation.
+Respond with ≤80 words describing the reasoning, then output a JSON object:
 {{"support_change": int, "public_change": int, "chamber_progress_change": int, "reelection_risk": int}}
 """
-
 
     try:
         r = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
+                {"role": "user", "content": user_prompt},
             ],
         )
         text = r.choices[0].message.content
+
         try:
             json_part = text[text.index("{"): text.rindex("}") + 1]
             data = json.loads(json_part)
         except Exception:
             data = dict(support_change=0, public_change=0, chamber_progress_change=0, reelection_risk=0)
-        return text, data
+
+        # --- Apply changes immediately ---
+        st.session_state.support = (st.session_state.support or current_support) + data["support_change"]
+        st.session_state.public += data["public_change"]
+        st.session_state.chamber_progress += data["chamber_progress_change"]
+        st.session_state.reelection_risk += data["reelection_risk"]
+
+        # --- Build "after-change" summary prompt for GPT ---
+        post_prompt = f"""
+Now write a short narrative (≤120 words) describing the *results* of this turn
+after the above changes have been applied.
+
+Updated stats:
+- Chamber Support: {st.session_state.support}%
+- Public Approval: {st.session_state.public}%
+- Chamber Progress: {st.session_state.chamber_progress}%
+- Reelection Risk: {st.session_state.reelection_risk}%
+
+Focus on what just happened (e.g., support rose, progress advanced, or risk changed)
+and avoid repeating the numeric JSON output.
+"""
+
+        r2 = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": post_prompt},
+            ],
+        )
+
+        final_text = r2.choices[0].message.content
+        return final_text, data
+
     except Exception as e:
         return f"⚠️ GPT error: {e}", dict(support_change=0, public_change=0, chamber_progress_change=0, reelection_risk=0)
+
 
 # ------------------------------------------------------
 # HELPERS
