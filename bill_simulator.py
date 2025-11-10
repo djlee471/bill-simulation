@@ -134,16 +134,17 @@ def gpt_simulate(action_text):
     "**POLITICAL ISSUE CONTEXT**\n"
     "Some issues are elite-partisan but mass-mixed (e.g., abortion, marijuana legalization, same-sex marriage). "
     "Treat these as wedge issues: they should have highly polarized chamber reactions but relatively stable or mildly positive public reactions.\n\n"
-
     "**HARD RULES**\n"
     "1) Separate worlds: District/public approval NEVER affects chamber progress.\n"
     "2) Chamber support ceilings must follow composition realism:\n"
+    "   - Let player_party_share = (player_party_seats / total_seats) × 100.\n"
     "   - Let majority_share = (majority_party_seats / total_seats) × 100.\n"
-    "   - **For partisan or controversial bills:** max_support = majority_share + 5.\n"
+    "   - **For partisan or controversial bills:** max_support = player_party_share + 1.\n"
+    "     (Support should not exceed the sponsoring party’s caucus size unless genuine bipartisan cooperation occurs.)\n"
     "   - **For bipartisan or consensus bills:** max_support = majority_share + 10 (never above 80).\n"
-    "   - Minority-party bills start ≈35–45% and cannot exceed 50 without bipartisan cooperation or reconciliation.\n"
-    "3) Chamber progress depends ONLY on support level and leadership/procedure. Once support > threshold, progress cannot decrease unless there is a procedural defeat.\n\n"
-
+    "3) Chamber progress depends ONLY on support level and leadership/procedure.\n"
+    "   - Reconciliation affects chamber progress thresholds, not chamber support.\n"
+    "   - Once support > threshold, progress cannot decrease unless there is a procedural defeat.\n\n"
     "**SUPPORT INCREMENT RULES (Hard Enforcement)**\n"
     "- support_change values must *always* be nonzero unless the bill is defeated or withdrawn.\n"
     "- Use these fixed numeric ranges depending on context:\n"
@@ -209,25 +210,33 @@ def gpt_simulate(action_text):
     "- When narrative context conflicts with numeric rules, numeric realism takes priority.\n"
     )
 
-
     # --- Determine current (pre-turn) stats ---
-    if st.session_state.support is None or st.session_state.turn == 1:
-        # Compute baseline using your party's seat share, not total chamber control
+    # Compute baseline only once, when the game starts
+    if "support" not in st.session_state or st.session_state.support is None:
+        # Defensive defaults in case seat numbers aren't yet loaded
+        chamber_total = (chamber_D or 0) + (chamber_R or 0)
+        if chamber_total == 0:
+            chamber_total = 1  # avoid division by zero
+
         if your_party == "Democrat":
-            party_share = (chamber_D / (chamber_D + chamber_R)) * 100
+            party_share = (chamber_D / chamber_total) * 100
         else:
-            party_share = (chamber_R / (chamber_D + chamber_R)) * 100
+            party_share = (chamber_R / chamber_total) * 100
 
         # Apply baseline offset for realism
-        chamber_baseline = party_share - 15
+        chamber_baseline = (party_share or 0) - 15
 
         # Ensure values stay within logical bounds
         chamber_baseline = max(20, min(chamber_baseline, 60))
 
-        current_support = round(chamber_baseline)
-    else:
-        current_support = st.session_state.support
+        st.session_state.support = round(chamber_baseline)
 
+    # Use stored value each turn (no re-computation)
+    current_support = st.session_state.support or 0
+
+    # --- Detect reconciliation reference early (so GPT sees it this turn) ---
+    if "reconciliation" in action_text.lower():
+        st.session_state.reconciliation_discussed = True
 
     # Optional: context phrasing
     context_note = (
@@ -235,6 +244,7 @@ def gpt_simulate(action_text):
         if st.session_state.turn == 1
         else "Following previous actions,"
     )
+
 
     try:
         # --- Single GPT call: compute + narrate after applying changes ---
@@ -293,12 +303,6 @@ Output format:
         except Exception:
             data = dict(support_change=0, public_change=0,
                         chamber_progress_change=0, reelection_risk=0)
-
-        # --- Apply deltas after parsing ---
-        st.session_state.support = (st.session_state.support or current_support) + data["support_change"]
-        st.session_state.public += data["public_change"]
-        st.session_state.chamber_progress += data["chamber_progress_change"]
-        st.session_state.reelection_risk += data["reelection_risk"]
 
         return text, data
 
