@@ -148,12 +148,13 @@ def gpt_simulate(action_text):
     "- support_change values must *always* be nonzero unless the bill is defeated or withdrawn.\n"
     "- Use these fixed numeric ranges depending on context:\n"
     "  - When chamber support < threshold (House <51% / Senate <60%):\n"
-    "      + Outreach / lobbying / coalition-building: +4–8\n"
-    "      + Procedural or symbolic actions: +2–4\n"
-    "  - When chamber support ≥ threshold but <70%: +1–3 (stabilization or consolidation)\n"
-    "  - When major leadership / committee / media events occur: +6–10 (never zero)\n"
+    "      + Outreach / lobbying / coalition-building: +2-5\n"
+    "      + Procedural or symbolic actions: +2-4\n"
+    "  - When chamber support ≥ threshold but <70%: +0-2 (stabilization or consolidation)\n"
+    "  - When major leadership / committee / media events occur: +2-5 (never zero)\n"
     "  - Never output zero for support_change unless support >70% (already overwhelming) or the action clearly fails.\n"
-    "- Chamber support cannot exceed majority_share +5 (partisan) or +10 (bipartisan).\n"
+    "- Irrelevant actions or inaction should yield zero or negative support changes.\n"
+    "- Chamber support cannot exceed majority_share +5 (partisan) or +10 (bipartisan).\n"   
     "- Apply these numeric ranges *strictly*, regardless of narrative tone.\n\n"
 
     "**NUMERIC RULES — HARD-CODED AND MANDATORY**\n"
@@ -203,10 +204,26 @@ def gpt_simulate(action_text):
     )
 
 
-# Safely handle None on first turn
-    current_support = 0 if st.session_state.support is None else st.session_state.support
+    # Safely handle baseline support on first turn
+    if st.session_state.support is None or st.session_state.turn == 1:
+        # Use deterministic baseline rule instead of 0
+        if your_chamber == "House":
+            chamber_baseline = (chamber_D / (chamber_D + chamber_R) * 100) - 15
+        else:
+            chamber_baseline = (chamber_D / (chamber_D + chamber_R) * 100) - 15
+        current_support = round(chamber_baseline)
+    else:
+        current_support = st.session_state.support
+
+    # Optional: smoother phrasing for Turn 1
+    if st.session_state.turn == 1:
+        context_note = "At the start of the session, before any lobbying or media efforts,"
+    else:
+        context_note = "Following previous actions,"
 
     user_prompt = f"""
+{context_note}
+
 Member info:
 - Chamber: {your_chamber}
 - Party: {your_party}
