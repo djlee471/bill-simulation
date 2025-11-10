@@ -221,8 +221,9 @@ def gpt_simulate(action_text):
         else "Following previous actions,"
     )
 
-    # --- Build first GPT call (to get deltas) ---
-    user_prompt = f"""
+    try:
+        # --- Single GPT call: compute + narrate after applying changes ---
+        user_prompt = f"""
 {context_note}
 
 Member info:
@@ -231,7 +232,7 @@ Member info:
 - District Lean: {district_lean}
 - Composition: {chamber_D} D / {chamber_R} R (Control: {chamber_control})
 
-Current stats:
+Current stats (before this turn):
 - Support: {current_support}% ({'below' if current_support < 51 else 'above'} majority threshold)
 - Public Approval: {st.session_state.public}%
 - Chamber Progress: {st.session_state.chamber_progress}%
@@ -239,12 +240,28 @@ Current stats:
 
 Action this turn: {action_text}
 
-Determine appropriate numeric deltas based on the situation.
-Respond with ≤80 words describing the reasoning, then output a JSON object:
-{{"support_change": int, "public_change": int, "chamber_progress_change": int, "reelection_risk": int}}
+Steps:
+1. Decide reasonable numeric deltas for this action and output them in JSON
+   {{ "support_change": int, "public_change": int,
+      "chamber_progress_change": int, "reelection_risk": int }}
+2. Then, **using those deltas**, narrate the *after-change* outcome in ≤120 words.
+   Show the updated numbers (e.g., "support rose to X%, progress reached Y%").
+3. Do not repeat the JSON verbatim in the narrative.
+4. Follow realism rules:
+   - Early turns → modest deltas (support ±3–5, progress ≤15)
+   - Maintain neutrality for even districts unless provoked
+   - Never let progress exceed 100%
+
+Output format:
+<NARRATIVE>
+{{
+  "support_change": int,
+  "public_change": int,
+  "chamber_progress_change": int,
+  "reelection_risk": int
+}}
 """
 
-    try:
         r = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -254,46 +271,26 @@ Respond with ≤80 words describing the reasoning, then output a JSON object:
         )
         text = r.choices[0].message.content
 
+        # --- Parse JSON at the end ---
         try:
             json_part = text[text.index("{"): text.rindex("}") + 1]
             data = json.loads(json_part)
         except Exception:
-            data = dict(support_change=0, public_change=0, chamber_progress_change=0, reelection_risk=0)
+            data = dict(support_change=0, public_change=0,
+                        chamber_progress_change=0, reelection_risk=0)
 
-        # --- Apply changes immediately ---
+        # --- Apply deltas after parsing ---
         st.session_state.support = (st.session_state.support or current_support) + data["support_change"]
         st.session_state.public += data["public_change"]
         st.session_state.chamber_progress += data["chamber_progress_change"]
         st.session_state.reelection_risk += data["reelection_risk"]
 
-        # --- Build "after-change" summary prompt for GPT ---
-        post_prompt = f"""
-Now write a short narrative (≤120 words) describing the *results* of this turn
-after the above changes have been applied.
-
-Updated stats:
-- Chamber Support: {st.session_state.support}%
-- Public Approval: {st.session_state.public}%
-- Chamber Progress: {st.session_state.chamber_progress}%
-- Reelection Risk: {st.session_state.reelection_risk}%
-
-Focus on what just happened (e.g., support rose, progress advanced, or risk changed)
-and avoid repeating the numeric JSON output.
-"""
-
-        r2 = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": post_prompt},
-            ],
-        )
-
-        final_text = r2.choices[0].message.content
-        return final_text, data
+        return text, data
 
     except Exception as e:
-        return f"⚠️ GPT error: {e}", dict(support_change=0, public_change=0, chamber_progress_change=0, reelection_risk=0)
+        return f"⚠️ GPT error: {e}", dict(support_change=0, public_change=0,
+                                          chamber_progress_change=0, reelection_risk=0)
+
 
 
 # ------------------------------------------------------
