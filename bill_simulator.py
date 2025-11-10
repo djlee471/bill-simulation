@@ -218,6 +218,11 @@ def gpt_simulate(action_text):
         - Public Approval: {st.session_state.public}%
         - Chamber Progress: {st.session_state.chamber_progress}%
         - Reelection Risk: {st.session_state.reelection_risk}
+        
+        - For calculations: new_support = current_support + support_change
+          (Use this value when applying the progress-zone rules.)
+        - Reminder: If new_support ≥ threshold, you must apply the “above-threshold” range (25–35).
+
 
         Action This Turn
         {action_text}
@@ -236,21 +241,42 @@ def gpt_simulate(action_text):
            - This new_support value determines which progress zone applies.
 
         3. **Progress zones (MANDATORY)**
-           - If new_support is **below threshold**, chamber_progress_change = 0–15 only.
-           - If new_support is **at or above threshold**, chamber_progress_change = 25–35 only.
-           - Values outside these ranges are not permitted under any circumstance,
-             unless the player action is clearly reckless, ineffective, or irrelevant.
-           - If the resulting total progress would exceed 100%, cap it at 100 **after** adding the change.
-             Do **not** reduce the chosen change pre-emptively just because the total approaches 100%.
-           - Once new_support meets or exceeds the threshold (House 51 % / Senate 60 %),
-             chamber_progress_change may fall within the decisive 25–35 range **only if the player’s action
-             meaningfully advances the bill** (e.g., procedural maneuver, negotiation, leadership coordination,
-             or major public push).
-             - If the action is neutral, symbolic, or ineffective (e.g., “do nothing,” “minor statement,”
-               “routine press release”), use a smaller chamber_progress_change of 0–10 instead,
-               even if support exceeds the threshold.
-             - If the resulting total progress would exceed 100 %, cap it at 100 **after** adding the change.
-             - Do **not** reduce the chosen change pre-emptively just because the total approaches 100 %.
+           Always base the progress zone on the *new_support* value 
+           (i.e., current_support + support_change), not the previous turn’s support.
+           Determine chamber_progress_change based on current support level and the nature of the action:
+
+           • **Below threshold** (House <51% / Senate <60%):
+             - chamber_progress_change = 10–25 only for actions that plausibly build support.
+
+           • **At or above threshold**:
+             - chamber_progress_change = 25–35 for politically significant or procedural actions 
+               (e.g., committee markup, leadership negotiation, floor scheduling, final vote).
+             - chamber_progress_change = 20–25 for neutral, symbolic, or maintenance actions 
+               (e.g., “do nothing,” “minor statement,” “routine press release,” or 
+               member-maintenance and coalition-building efforts). When support has been rising 
+               steadily across several turns, favor the **upper half** of this range (23–25).
+             - chamber_progress_change = 0–20 for reckless, controversial, or backfiring actions.
+
+           - Values outside the ranges given above are **not permitted**.
+
+           - **Late-stage acceleration (MANDATORY)**:
+             If total chamber_progress is 75% or higher **and** the player’s action is procedural,
+             leadership-oriented, or directly related to scheduling or passage 
+             (e.g., rule adoption, final negotiations, floor vote), 
+             then chamber_progress_change **must** be within 25–35.
+
+           - Do **not** slow or reduce the chosen change merely because total progress 
+             is near or above 100%. Let chamber_progress exceed 100% if needed to 
+             reflect decisive passage or overwhelming momentum. 
+             Treat any value at or above 100% as a completed bill for narrative purposes.
+           - In this late stage, you must still select a value within 25–35 
+             unless the action clearly backfires. Do not deliberately choose 
+             smaller numbers just because progress is already near 100 %.
+
+           - **Momentum scaling (MANDATORY)**:
+             If support has increased for three or more consecutive turns, 
+             raise the lower and upper bounds of any applicable progress range by +5. 
+             This ensures momentum translates into visible acceleration.
 
 
         4. **Scaling within the range**
@@ -266,6 +292,13 @@ def gpt_simulate(action_text):
            - Negative values (−1 to −4) occur only if the action backfires, causes controversy,
              or alienates moderates.
            - Never output 0 unless the action is explicitly ineffective or purely administrative.
+
+           - Support should represent backing across the entire chamber, not just your own party.
+             It should rarely exceed the member’s party seat share **plus about 3 percentage points**
+             unless a clear bipartisan breakthrough occurs. 
+             Once support approaches this ceiling, choose smaller positive changes (+1–2) 
+             or stabilization (0) rather than continued large increases.
+
 
         6. **Public support and reelection risk relationship (MANDATORY)**
            - Reelection risk changes should mirror changes in public support, just as chamber progress mirrors chamber support.
@@ -293,6 +326,10 @@ def gpt_simulate(action_text):
         1. Decide reasonable numeric deltas for this action and output them in JSON. 
            Remember to use new_support when deciding chamber_progress_change,
            and ensure the chosen chamber_progress_change stays strictly within the mandated range for its zone.
+           Reelection risk should be recalculated fresh each turn based on the new public approval 
+           and district lean, not accumulated from prior values. A small change in public approval 
+           (±1–2 points) should cause only a correspondingly small change in risk (±1–2 points).
+
            {{
              "support_change": int,
              "public_change": int,
@@ -310,6 +347,8 @@ def gpt_simulate(action_text):
            - Maintain neutrality for even districts unless provoked
            - Never let total chamber progress exceed 100%
            - Do not artificially slow progress when nearing 100%. Let chamber progress reach 100% naturally.
+           - If chamber_progress appears low relative to repeated increases in support,
+            adjust upward within the allowed range so that momentum is visible to the player.
 
         Output Format
         <NARRATIVE>
@@ -441,16 +480,35 @@ if not st.session_state.game_over:
             if action:
                 narrative, data = gpt_simulate(action)
 
-                if st.session_state.support is None:
-                    majority_share = round((chamber_D / (chamber_D + chamber_R)) * 100)
-                    st.session_state.support = max(0, min(100, majority_share - 15 + data["support_change"]))
-                    st.session_state.public = max(0, min(100, 50 + data["public_change"]))
+                # Calculate player's party share and dynamic realism cap
+                if your_party == "Democrat":
+                    party_share = (chamber_D / (chamber_D + chamber_R)) * 100
                 else:
-                    st.session_state.support = max(0, min(100, st.session_state.support + data["support_change"]))
-                    st.session_state.public = max(0, min(100, st.session_state.public + data["public_change"]))
+                    party_share = (chamber_R / (chamber_D + chamber_R)) * 100
+                support_cap = min(100, party_share + 5)
+
+                if st.session_state.support is None:
+                    # First-turn baseline (majority_share - 15 realism offset)
+                    majority_share = round((chamber_D / (chamber_D + chamber_R)) * 100)
+                    st.session_state.support = max(
+                        0,
+                        min(support_cap, majority_share - 15 + data["support_change"])
+                    )
+                    st.session_state.public = max(
+                        0, min(100, 50 + data["public_change"])
+                    )
+                else:
+                    st.session_state.support = max(
+                        0,
+                        min(support_cap, st.session_state.support + data["support_change"])
+                    )
+                    st.session_state.public = max(
+                        0,
+                        min(100, st.session_state.public + data["public_change"])
+                    )
 
                 st.session_state.chamber_progress = max(0, min(100, st.session_state.chamber_progress + data["chamber_progress_change"]))
-                st.session_state.reelection_risk += max(0, data["reelection_risk"])
+                st.session_state.reelection_risk = max(0, min(10, data["reelection_risk"]))
 
                 reelection_chance = calc_reelection_chance()
                 update_trends(reelection_chance)
