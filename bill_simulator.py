@@ -116,176 +116,211 @@ if "turn" not in st.session_state:
 def gpt_simulate(action_text):
     client = OpenAI(api_key=api_key)
 
-    system_prompt = (
-    "You are a political simulation engine for the U.S. Congress.\n"
-    "Return a ≤120-word narrative, then a JSON object with numeric deltas.\n\n"
+    system_prompt = """
+    You are the institutional logic engine of a U.S. congressional simulation.
+    Model all behavior as if operating within the real constraints of Congress.
 
-    "INPUT DEFINITIONS\n"
-    "- Chamber support = % of legislators likely to vote yes.\n"
-    "- Chamber progress = procedural momentum (committee → floor → passage).\n"
-    "- Public approval = district opinion (affects reelection only).\n\n"
+    INSTITUTIONAL FOUNDATIONS
+    - The U.S. House is a majoritarian chamber: floor control by the majority party.
+      - Passage threshold = 51% support.
+      - Rules Committee and leadership can use closed rules to protect members and restrict amendments.
+    - The U.S. Senate is a supermajoritarian chamber: floor action governed by cloture and filibuster.
+      - Standard cloture threshold = 60% support to end debate.
+      - Simple-majority passage possible only if the filibuster is overcome (via cloture) or bypassed through reconciliation.
+    - Reconciliation (budget-related path):
+      - Allows the majority party to pass with a simple majority (51%).
+      - Limited debate, narrow scope; cannot be used for all policy areas.
+    - Minority-party or bipartisan dynamics must reflect chamber structure:
+      - House: majority dominance, limited cross-party influence.
+      - Senate: cross-party bargaining essential unless reconciliation is invoked.
 
-    "**CHAMBER PROCEDURAL REALISM**\n"
-    "- The House operates by simple majority (51%).\n"
-    "- The Senate normally requires 60 votes for cloture.\n"
-    "- Under reconciliation, the Senate needs only 51 votes and bypasses cloture.\n"
-    "- Do **not** mention reconciliation or cloture unless the user mentions them.\n\n"
+    OUTPUT STRUCTURE
+    - Each turn, write a concise narrative (2–4 sentences) explaining developments in this institutional context.
+    - Then output JSON with four numeric deltas:
+      {
+        "support_change": X,
+        "public_change": Y,
+        "chamber_progress_change": Z,
+        "reelection_risk": R
+      }
 
-    "**POLITICAL ISSUE CONTEXT**\n"
-    "Some issues are elite-partisan but mass-mixed (e.g., abortion, marijuana legalization, same-sex marriage). "
-    "Treat these as wedge issues: they should have highly polarized chamber reactions but relatively stable or mildly positive public reactions.\n\n"
-    "**HARD RULES**\n"
-    "1) Separate worlds: District/public approval NEVER affects chamber progress.\n"
-    "2) Chamber support ceilings must follow composition realism:\n"
-    "   - Let player_party_share = (player_party_seats / total_seats) × 100.\n"
-    "   - Let majority_share = (majority_party_seats / total_seats) × 100.\n"
-    "   - **For partisan or controversial bills:** max_support = player_party_share + 1.\n"
-    "     (Support should not exceed the sponsoring party’s caucus size unless genuine bipartisan cooperation occurs.)\n"
-    "   - **For bipartisan or consensus bills:** max_support = majority_share + 10 (never above 80).\n"
-    "3) Chamber progress depends ONLY on support level and leadership/procedure.\n"
-    "   - Reconciliation affects chamber progress thresholds, not chamber support.\n"
-    "   - Once support > threshold, progress cannot decrease unless there is a procedural defeat.\n\n"
-    "**SUPPORT INCREMENT RULES (Hard Enforcement)**\n"
-    "- support_change values must *always* be nonzero unless the bill is defeated or withdrawn.\n"
-    "- Use these fixed numeric ranges depending on context:\n"
-    "  - When chamber support < threshold (House <51% / Senate <60%):\n"
-    "      + Outreach / lobbying / coalition-building: +2–5\n"
-    "      + Procedural or symbolic actions: +2–4\n"
-    "  - When chamber support ≥ threshold but <70%: +0–2 (stabilization or consolidation)\n"
-    "  - When major leadership / committee / media events occur: +2–5 (never zero)\n"
-    "  - Never output zero for support_change unless support >70% (already overwhelming) or the action clearly fails.\n"
-    "- Irrelevant actions or inaction should yield zero or negative support changes.\n"
-    "- Chamber support cannot exceed majority_share +5 (partisan) or +10 (bipartisan).\n"
-    "- Apply these numeric ranges *strictly*, regardless of narrative tone.\n\n"
+    Interpret and enforce all numeric and procedural rules from the user prompt faithfully.
+    """
 
-    "**NUMERIC RULES — HARD-CODED AND MANDATORY**\n"
-    "- Treat all thresholds as fixed constants: House = 51%, Senate = 60%.\n"
-    "- For the House: decisive = 55%, overwhelming = 70%.\n"
-    "- For the Senate: decisive = 65%, overwhelming = 75%.\n"
-    "- These zones are non-negotiable.\n\n"
+    # ------------------------------------------------------------
+    # PRE-PROMPT STATE SETUP  (must run before building user_prompt)
+    # ------------------------------------------------------------
 
-    "**PROGRESS ZONES (MANDATORY OUTPUT RANGES)**\n"
-    "- Below threshold (<51% House / <60% Senate): chamber_progress_change = +10–20.\n"
-    "- Momentum zone (51–55% House / 60–65% Senate): chamber_progress_change = +25–30.\n"
-    "- Decisive zone (>55% House / >65% Senate): chamber_progress_change = +30–40.\n"
-    "- Overwhelming (≥70% House / ≥75% Senate): chamber_progress_change = +35–45.\n"
-    "- Minority-party bills: +5–10 only, capped at ~50 progress unless bipartisan or reconciliation is used.\n\n"
-
-    "**PROCEDURAL MODIFIERS (RECONCILIATION LOGIC)**\n"
-    "- If the chamber is the Senate and reconciliation is in discussion (`reconciliation_discussed == True`), "
-    "treat the 60% cloture requirement as waived and apply progress as if the threshold were 51%.\n"
-    "- When reconciliation is not in discussion and the user's party is in the minority, "
-    "cap `chamber_progress_change` at +5 and `support_change` at +2 to reflect gridlock.\n"
-    "- Once reconciliation is being pursued, allow larger progress changes (+15–25) even without 60% support, "
-    "representing fast-tracking.\n"
-    "- Never let progress exceed 100% or fall below +5 when support ≥ threshold.\n\n"
-
-    "**REELECTION THRESHOLD LOGIC**\n"
-    "- Public approval >55%: reelection odds improve noticeably.\n"
-    "- 45–55%: reelection uncertain; risk changes small.\n"
-    "- <45%: reelection risk rises sharply.\n"
-    "- In evenly divided or opposing districts, controversial actions create proportional backlash.\n\n"
-
-    "**MAGNITUDES**\n"
-    "- support_change: ±2–8 (smaller for partisan bills)\n"
-    "- public_change: D-lean + Dem policy or R-lean + GOP policy = +5–10; misaligned −5–10; EVEN = −2..+2 on divisive issues\n"
-    "- reelection_risk: +0–8 (independent of public_change; avoid double-counting)\n\n"
-
-    "**OUTPUT FORMAT**\n"
-    "Write a short narrative (≤150 words) describing this turn’s outcome.\n"
-    "Then output ONLY a JSON object like:\n"
-    "{\n"
-    "  \"support_change\": int,\n"
-    "  \"public_change\": int,\n"
-    "  \"chamber_progress_change\": int,\n"
-    "  \"reelection_risk\": int\n"
-    "}\n\n"
-
-    "**INSTRUCTIONS FOR THIS TURN**\n"
-    "- Use the chamber composition, party control, and district lean provided in the user input.\n"
-    "- Apply ceilings, numeric progress rules, and reelection logic using live inputs.\n"
-    "- Choose progress increment strictly from the correct support zone.\n"
-    "- Incorporate procedural context such as reconciliation discussion when determining progress.\n"
-    "- Reference live support, public, and progress values.\n"
-    "- When narrative context conflicts with numeric rules, numeric realism takes priority.\n"
-    )
-
-    # --- Determine current (pre-turn) stats ---
-    # Compute baseline only once, when the game starts
+    # --- Compute baseline once at game start ---
     if "support" not in st.session_state or st.session_state.support is None:
-        # Defensive defaults in case seat numbers aren't yet loaded
         chamber_total = (chamber_D or 0) + (chamber_R or 0)
         if chamber_total == 0:
-            chamber_total = 1  # avoid division by zero
+            chamber_total = 1  # defensive guard
 
-        if your_party == "Democrat":
-            party_share = (chamber_D / chamber_total) * 100
-        else:
-            party_share = (chamber_R / chamber_total) * 100
+        # Compute share of seats for player's party
+        party_share = (
+            (chamber_D / chamber_total) * 100
+            if your_party == "Democrat"
+            else (chamber_R / chamber_total) * 100
+        )
 
-        # Apply baseline offset for realism
-        chamber_baseline = (party_share or 0) - 15
+        # Apply fixed baseline offset (e.g., -12 for realism)
+        chamber_baseline = party_share - 12
 
-        # Ensure values stay within logical bounds
+        # Keep the baseline within reasonable bounds (20–60%)
         chamber_baseline = max(20, min(chamber_baseline, 60))
 
+        # Store baseline support in session state
         st.session_state.support = round(chamber_baseline)
 
-    # Use stored value each turn (no re-computation)
+    # --- Retrieve persistent state for this turn ---
     current_support = st.session_state.support or 0
 
-    # --- Detect reconciliation reference early (so GPT sees it this turn) ---
+    # --- Detect reconciliation (once mentioned, stays True) ---
+    if "reconciliation_discussed" not in st.session_state:
+        st.session_state.reconciliation_discussed = False
+
     if "reconciliation" in action_text.lower():
         st.session_state.reconciliation_discussed = True
 
-    # Optional: context phrasing
+    # --- Narrative phrasing for Turn 1 vs later turns ---
+    if "turn" not in st.session_state:
+        st.session_state.turn = 1  # defensive default
+
     context_note = (
         "At the start of the session, before any lobbying or media efforts,"
         if st.session_state.turn == 1
         else "Following previous actions,"
     )
 
+    # --- Optional: dynamic reconciliation note for prompt ---
+    recon_note = (
+        "Reconciliation is currently being discussed; treat the Senate threshold as 51%."
+        if st.session_state.reconciliation_discussed and your_chamber == "Senate"
+        else ""
+    )
+
 
     try:
         # --- Single GPT call: compute + narrate after applying changes ---
         user_prompt = f"""
-{context_note}
+        {context_note}
 
-Member info:
-- Chamber: {your_chamber}
-- Party: {your_party}
-- District Lean: {district_lean}
-- Composition: {chamber_D} D / {chamber_R} R (Control: {chamber_control})
+        Member Info
+        - Chamber: {your_chamber}
+        - Party: {your_party}
+        - District Lean: {district_lean}
+        - Composition: {chamber_D} D / {chamber_R} R (Control: {chamber_control})
 
-Current stats (before this turn):
-- Support: {current_support}% ({'below' if current_support < 51 else 'above'} majority threshold)
-- Public Approval: {st.session_state.public}%
-- Chamber Progress: {st.session_state.chamber_progress}%
-- Reelection Risk: {st.session_state.reelection_risk}
+        Current Stats (before this turn)
+        - Support: {current_support}% of the entire {your_chamber} (not just your party caucus)
+          ({'below' if current_support < 51 else 'above'} the majority threshold)
+        - Public Approval: {st.session_state.public}%
+        - Chamber Progress: {st.session_state.chamber_progress}%
+        - Reelection Risk: {st.session_state.reelection_risk}
 
-Action this turn: {action_text}
+        Action This Turn
+        {action_text}
 
-Steps:
-1. Decide reasonable numeric deltas for this action and output them in JSON
-   {{ "support_change": int, "public_change": int,
-      "chamber_progress_change": int, "reelection_risk": int }}
-2. Then, **using those deltas**, narrate the *after-change* outcome in ≤120 words.
-   Show the updated numbers (e.g., "support rose to X%, progress reached Y%").
-3. Do not repeat the JSON verbatim in the narrative.
-4. Follow realism rules:
-   - Early turns → modest deltas (support ±3–5, progress ≤15)
-   - Maintain neutrality for even districts unless provoked
-   - Never let progress exceed 100%
+        ------------------------------------------------------------
+        NUMERIC RULES — SUPPORT, PROGRESS & REELECTION
+        ------------------------------------------------------------
+        1. **Thresholds for passage**
+           - House: 51%
+           - Senate: 60%
+           - If reconciliation is being used in the Senate, use 51% instead of 60%.
 
-Output format:
-<NARRATIVE>
-{{
-  "support_change": int,
-  "public_change": int,
-  "chamber_progress_change": int,
-  "reelection_risk": int
-}}
-"""
+        2. **Support calculation**
+           - First, calculate the *new support level*:
+             new_support = current_support + support_change
+           - This new_support value determines which progress zone applies.
+
+        3. **Progress zones (MANDATORY)**
+           - If new_support is **below threshold**, chamber_progress_change = 0–15 only.
+           - If new_support is **at or above threshold**, chamber_progress_change = 25–35 only.
+           - Values outside these ranges are not permitted under any circumstance,
+             unless the player action is clearly reckless, ineffective, or irrelevant.
+           - If the resulting total progress would exceed 100%, cap it at 100 **after** adding the change.
+             Do **not** reduce the chosen change pre-emptively just because the total approaches 100%.
+           - Once new_support meets or exceeds the threshold (House 51 % / Senate 60 %),
+             chamber_progress_change may fall within the decisive 25–35 range **only if the player’s action
+             meaningfully advances the bill** (e.g., procedural maneuver, negotiation, leadership coordination,
+             or major public push).
+             - If the action is neutral, symbolic, or ineffective (e.g., “do nothing,” “minor statement,”
+               “routine press release”), use a smaller chamber_progress_change of 0–10 instead,
+               even if support exceeds the threshold.
+             - If the resulting total progress would exceed 100 %, cap it at 100 **after** adding the change.
+             - Do **not** reduce the chosen change pre-emptively just because the total approaches 100 %.
+
+
+        4. **Scaling within the range**
+           - Choose the exact chamber_progress_change based on:
+             (a) The *magnitude* of support_change this turn.
+             (b) The *strategic significance* of the action (e.g., leadership meeting, procedural step).
+             (c) The *likelihood that this action materially increases the bill’s chance of passage.*
+
+        5. **Support-change guidelines**
+           - Typical values: ±2–6 depending on action type and timing.
+           - Early turns or symbolic actions → smaller (±2–4).
+           - Direct negotiation, leadership, or procedural breakthroughs → larger (+4–6).
+           - Negative values (−1 to −4) occur only if the action backfires, causes controversy,
+             or alienates moderates.
+           - Never output 0 unless the action is explicitly ineffective or purely administrative.
+
+        6. **Public support and reelection risk relationship (MANDATORY)**
+           - Reelection risk changes should mirror changes in public support, just as chamber progress mirrors chamber support.
+           - First, calculate the *new public approval*:
+             new_public = current_public + public_change
+           - Then determine reelection risk based on that new value.
+
+           - If new_public is **above 55%**, risk should be **low (0–2)**.
+           - If new_public is **between 45% and 55%**, risk should be **moderate (3–5)**.
+           - If new_public is **below 45%**, risk should be **high (6–8)**.
+
+           - When public_change is positive, reduce reelection_risk proportionally (typically −1 to −3).
+           - When public_change is negative, increase reelection_risk proportionally (+1 to +3).
+           - The final reelection_risk value must remain between **0 and 10**.
+
+           - District lean may slightly modify these outcomes:
+             • If district lean aligns with the member’s policy, risk may drop by 1.
+             • If district lean opposes it, risk may increase by 1.
+           - **Do not assign a value of 10** unless public approval falls below **40%**
+             or the action clearly triggers severe backlash or scandal.
+
+        ------------------------------------------------------------
+        INSTRUCTIONS
+        ------------------------------------------------------------
+        1. Decide reasonable numeric deltas for this action and output them in JSON. 
+           Remember to use new_support when deciding chamber_progress_change,
+           and ensure the chosen chamber_progress_change stays strictly within the mandated range for its zone.
+           {{
+             "support_change": int,
+             "public_change": int,
+             "chamber_progress_change": int,
+             "reelection_risk": int
+           }}
+
+        2. Then, **using those deltas**, narrate the *after-change* outcome in ≤120 words.
+           Include the updated numbers (e.g., "support rose to X%, progress reached Y%").
+
+        3. Do not repeat the JSON verbatim in the narrative.
+
+        4. Follow realism rules:
+           - Early turns → modest deltas (support ±3–5, progress ≤15)
+           - Maintain neutrality for even districts unless provoked
+           - Never let total chamber progress exceed 100%
+           - Do not artificially slow progress when nearing 100%. Let chamber progress reach 100% naturally.
+
+        Output Format
+        <NARRATIVE>
+        {{
+          "support_change": int,
+          "public_change": int,
+          "chamber_progress_change": int,
+          "reelection_risk": int
+        }}
+        """
+
 
         r = client.chat.completions.create(
             model="gpt-4o-mini",
