@@ -212,13 +212,22 @@ def gpt_simulate(action_text):
 
     # --- Determine current (pre-turn) stats ---
     if st.session_state.support is None or st.session_state.turn == 1:
-        if your_chamber == "House":
-            chamber_baseline = (chamber_D / (chamber_D + chamber_R) * 100) - 15
+        # Compute baseline using your party's seat share, not total chamber control
+        if your_party == "Democrat":
+            party_share = (chamber_D / (chamber_D + chamber_R)) * 100
         else:
-            chamber_baseline = (chamber_D / (chamber_D + chamber_R) * 100) - 15
+            party_share = (chamber_R / (chamber_D + chamber_R)) * 100
+
+        # Apply baseline offset for realism
+        chamber_baseline = party_share - 15
+
+        # Ensure values stay within logical bounds
+        chamber_baseline = max(20, min(chamber_baseline, 60))
+
         current_support = round(chamber_baseline)
     else:
         current_support = st.session_state.support
+
 
     # Optional: context phrasing
     context_note = (
